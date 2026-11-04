@@ -1,105 +1,100 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-import json
+#!/usr/bin/env python3
+"""
+Thin GUI Launcher for the Swarm Controller.
+Does NOT modify flight logic. Only launches the proven CLI command.
+"""
 import os
 import subprocess
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-class SwarmGUI:
+WORKSPACE = os.path.expanduser("~/swarm_ws")
+
+class SwarmLauncherGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Swarm Mission Planner")
-        self.root.geometry("350x450")
-        self.config_path = os.path.expanduser("~/swarm_ws/src/swarm_ctrl/swarm_ctrl/mission_config.json")
-        
-        self.shape_var = tk.StringVar(value="equilateral")
-        self.path_var = tk.StringVar(value="forward")
-        
-        self.create_widgets()
+        self.root.title("Swarm Mission Launcher")
+        self.root.geometry("400x380")
+        self.vars = {}
 
-    def create_widgets(self):
-        # Shape Selection
-        shape_frame = ttk.LabelFrame(self.root, text="1. Formation Shape")
-        shape_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Radiobutton(shape_frame, text="Equilateral Triangle", variable=self.shape_var, value="equilateral", command=self.update_dim_fields).pack(anchor="w")
-        ttk.Radiobutton(shape_frame, text="Right Triangle", variable=self.shape_var, value="right_triangle", command=self.update_dim_fields).pack(anchor="w")
-        ttk.Radiobutton(shape_frame, text="Custom Offsets", variable=self.shape_var, value="custom", command=self.update_dim_fields).pack(anchor="w")
-        
-        # Dimensions
-        self.dim_frame = ttk.LabelFrame(self.root, text="2. Dimensions (meters)")
-        self.dim_frame.pack(fill="x", padx=10, pady=5)
-        self.dim_entries = {}
-        self.update_dim_fields()
-        
-        # Path Selection
-        path_frame = ttk.LabelFrame(self.root, text="3. Mission Path")
-        path_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Label(path_frame, text="Path Type:").grid(row=0, column=0, padx=5, pady=5)
-        ttk.Combobox(path_frame, textvariable=self.path_var, values=["forward", "circular (coming soon)"], state="readonly").grid(row=0, column=1, padx=5, pady=5)
-        
-        ttk.Label(path_frame, text="Distance (m):").grid(row=1, column=0, padx=5, pady=5)
-        self.dist_entry = ttk.Entry(path_frame)
-        self.dist_entry.insert(0, "30.0")
-        self.dist_entry.grid(row=1, column=1, padx=5, pady=5)
-        
-        ttk.Label(path_frame, text="Speed (m/s):").grid(row=2, column=0, padx=5, pady=5)
-        self.speed_entry = ttk.Entry(path_frame)
-        self.speed_entry.insert(0, "1.0")
-        self.speed_entry.grid(row=2, column=1, padx=5, pady=5)
-        
-        # Launch Button
-        self.go_btn = ttk.Button(self.root, text="🚀 Let's Go!", command=self.launch_mission, style="Accent.TButton")
-        self.go_btn.pack(pady=20, ipady=10, ipadx=20)
+        info = tk.Label(
+            self.root,
+            text="1. Start restart_swarm.sh first.\n2. Wait for 'SWARM READY'.\n3. Click 'Let's Go!'",
+            fg="darkblue",
+            justify="left",
+            font=("Arial", 10)
+        )
+        info.pack(padx=10, pady=(10, 0), anchor="w")
 
-    def update_dim_fields(self):
-        for widget in self.dim_frame.winfo_children(): widget.destroy()
-        self.dim_entries.clear()
-        shape = self.shape_var.get()
-        if shape == 'equilateral':
-            ttk.Label(self.dim_frame, text="Side Length (m):").grid(row=0, column=0, padx=5, pady=5)
-            e = ttk.Entry(self.dim_frame); e.insert(0, "4.0"); e.grid(row=0, column=1, padx=5, pady=5)
-            self.dim_entries['side_length'] = e
-        elif shape == 'right_triangle':
-            ttk.Label(self.dim_frame, text="Side A (m):").grid(row=0, column=0, padx=5, pady=5)
-            e1 = ttk.Entry(self.dim_frame); e1.insert(0, "3.0"); e1.grid(row=0, column=1, padx=5, pady=5)
-            self.dim_entries['side_a'] = e1
-            ttk.Label(self.dim_frame, text="Side B (m):").grid(row=1, column=0, padx=5, pady=5)
-            e2 = ttk.Entry(self.dim_frame); e2.insert(0, "4.0"); e2.grid(row=1, column=1, padx=5, pady=5)
-            self.dim_entries['side_b'] = e2
-        elif shape == 'custom':
-            for i, d in enumerate(['drone0', 'drone1', 'drone2']):
-                ttk.Label(self.dim_frame, text=f"{d} (x,y):").grid(row=i, column=0, padx=5, pady=5)
-                e = ttk.Entry(self.dim_frame)
-                e.insert(0, "0,0" if i==0 else "3,0" if i==1 else "-3,0")
-                e.grid(row=i, column=1, padx=5, pady=5)
-                self.dim_entries[d] = e
+        frame = ttk.LabelFrame(self.root, text="Mission Parameters")
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-    def launch_mission(self):
+        fields = [
+            ("forward_distance_m", "Forward Distance (m)", "30.0"),
+            ("forward_speed_mps", "Forward Speed (m/s)", "0.5"),
+            ("formation_hold_before_forward_sec", "Hold Before Forward (s)", "5.0"),
+            ("formation_separation_m", "Formation Separation (m)", "2.0"),
+            ("altitude_stagger_m", "Altitude Stagger (m)", "2.0"),
+            ("base_altitude_m", "Base Altitude (m)", "5.0"),
+        ]
+
+        for row, (name, label, default) in enumerate(fields):
+            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", padx=8, pady=6)
+            var = tk.StringVar(value=default)
+            entry = ttk.Entry(frame, textvariable=var, width=12)
+            entry.grid(row=row, column=1, sticky="e", padx=8, pady=6)
+            self.vars[name] = var
+
+        self.launch_button = ttk.Button(
+            self.root, text="🚀 Let's Go!", command=self.launch_controller
+        )
+        self.launch_button.pack(pady=12, ipady=8, ipadx=16)
+
+        self.status_label = tk.Label(self.root, text="Ready.", fg="green", font=("Arial", 10, "bold"))
+        self.status_label.pack(pady=(0, 10))
+
+    def validate_floats(self):
+        values = {}
+        for name, var in self.vars.items():
+            try:
+                values[name] = float(var.get().strip())
+            except ValueError:
+                raise ValueError(f"{name} must be a number. Current: '{var.get()}'")
+        if values["forward_distance_m"] < 0.0:
+            raise ValueError("Forward distance cannot be negative.")
+        if values["forward_speed_mps"] <= 0.0:
+            raise ValueError("Forward speed must be > 0.")
+        return values
+
+    def launch_controller(self):
         try:
-            dist = float(self.dist_entry.get())
-            speed = float(self.speed_entry.get())
-        except ValueError:
-            messagebox.showerror("Error", "Distance and Speed must be numbers.")
+            values = self.validate_floats()
+        except ValueError as e:
+            messagebox.showerror("Invalid Parameter", str(e))
             return
+
+        ros_args = " ".join([f"-p {name}:={value}" for name, value in values.items()])
+        setup_path = os.path.join(WORKSPACE, "install", "setup.bash")
+        cmd = f"source {setup_path} && ros2 run swarm_ctrl swarm_controller --ros-args {ros_args}"
+
+        try:
+            self.launch_button.config(state=tk.DISABLED)
+            self.status_label.config(text="Launching controller...", fg="orange")
+            self.root.update()
             
-        config = {'shape': self.shape_var.get(), 'path_type': self.path_var.get(), 'path_distance': dist, 'speed': speed, 'dimensions': {}}
-        shape = config['shape']
-        if shape == 'equilateral': config['dimensions']['side_length'] = float(self.dim_entries['side_length'].get())
-        elif shape == 'right_triangle': 
-            config['dimensions']['side_a'] = float(self.dim_entries['side_a'].get())
-            config['dimensions']['side_b'] = float(self.dim_entries['side_b'].get())
-        elif shape == 'custom':
-            for d in ['drone0', 'drone1', 'drone2']:
-                vals = self.dim_entries[d].get().split(',')
-                config['dimensions'][d] = [float(vals[0]), float(vals[1])]
-                
-        with open(self.config_path, 'w') as f: json.dump(config, f, indent=4)
-        messagebox.showinfo("Success", "Config saved. Launching Controller...")
-        
-        # Launch the ROS 2 node via bash to ensure environment is sourced
-        cmd = "source ~/swarm_ws/install/setup.bash && ros2 run swarm_ctrl swarm_controller"
-        subprocess.Popen(['bash', '-c', cmd])
+            subprocess.Popen(["bash", "-c", cmd])
+            
+            self.status_label.config(text="Controller launched! Check terminal.", fg="green")
+            self.launch_button.config(state=tk.NORMAL)
+        except Exception as e:
+            self.launch_button.config(state=tk.NORMAL)
+            self.status_label.config(text="Launch failed.", fg="red")
+            messagebox.showerror("Launch Failed", str(e))
+
+def main(args=None):
+    root = tk.Tk()
+    SwarmLauncherGUI(root)
+    root.mainloop()
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = SwarmGUI(root)
-    root.mainloop()
+    main()

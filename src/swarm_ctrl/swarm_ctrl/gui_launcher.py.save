@@ -1,0 +1,57 @@
+tkinter as tkfrom tkinter import ttk, messagebox
+import json
+import os
+import subprocess
+
+class SwarmGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Swarm Mission Planner")
+        self.root.geometry("350x450")
+        self.config_path = os.path.expanduser("~/swarm_ws/src/swarm_ctrl/swarm_ctrl/mission_config.json")
+        
+        self.shape_var = tk.StringVar(value="equilateral")
+       .grid(row=0, column=1, padx=5, pady=5)
+        
+        ttk.Label(path_frame, text="Distance (m):").grid(row=1, column=0, padx=5, pady=5)
+        self.dist_entry = ttk.Entry(path_frame)
+        self.dist_entry.insert(0, "30.0")
+        self.dist_entry.grid(row=1, column=1, padx=5, pady=5)
+        
+        ttk.Label(path_frame, text="Speed (m/s):").grid(row=2, column=0, padx=5, pady=5)
+        self.speed_entry = ttk.Entry(path_frame)
+        self.speed_entry.insert(0, "1.0")
+        self.speed_entry.grid(row=2, column=1, padx=5, pady=5)
+        
+        # Launch Button
+        self.go_btn = ttk.Button(self.root, text="🚀 Let's Go!", command=self.launch_mission, style="Accent.TButton")
+        self.go_btn.pack(pady=20, ipady=10, ipadx=20)
+
+    def update_dim_fields(self):
+        for widget in self.dim_frame.winfo_children(): widget.destroy()
+        self.dim_entries.clear()
+        shape = self.shape_var.get()
+        if shape == 'equilateral':
+            ttk.Label(self.dim_frame, text="Side Length (m):").grid(row=0, column=0, padx=5, pady=5)
+            e = ttk.Entry(self.dim_frame); e.insert(0, "4.0"); e.grid(row=0, column=1, padx=5, pady=5)
+            self.dim_entries['side_length'] = e
+        elif shape == 'right_triangle':
+            ttk.Label(self.dim_frame, text="Side A (m):").grid(row=0, column=0, padx=5, pady=5)
+            e1 = ttk.Entry(self.dim_frame); e1.insert(0, "3.0"); e1.grid(row=0, column=1, padx=5, pady=5)
+            self.dim_entries['side_a'] = e1
+            ttk.Label(self.dim_frame, text="Side B (m):").grid(row=1, column=0, padx=5, pady=5)
+            e2 = ttk.Entry(self.dim_frame); e2.insert(0, "4.0"); e2.grid(row=1, column=1, padx=5, pady=5)
+            self.dim_entries['side_b'] = e2
+        elif shape == 'custom':
+            for i, d in enumerate(['drone0', 'drone1', 'drone2']):
+                ttk.Label(self.dim_frame, text=f"{d} (x,y):").grid(row=i, column=0, padx=5, pady=5)
+                e = ttk.Entry(self.dim_frame)
+                e.insert(0, "0,0" if i==0 else "3,0" if i==1 else "-3,0")
+                e.grid(row=i, column=1, padx=5, pady=5)
+                self.dim_entries[d] = e
+
+    def launch_mission(self):
+        try:
+            dist = float(self.dist_entry.get())
+            speed = float(self.speed_entry.get())
+        except ValueEr

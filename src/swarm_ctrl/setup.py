@@ -14,11 +14,12 @@ setup(
     maintainer_email='user@example.com',
     description='Hybrid Python swarm controller for PX4 + MAVROS2',
     license='MIT',
-    entry_points={
+           entry_points={
         'console_scripts': [
             'swarm_controller = swarm_ctrl.swarm_controller:main',
             'monitor = swarm_ctrl.monitor:main',
             'uwb_stub = swarm_ctrl.uwb_stub:main',
+            'gui_launcher = swarm_ctrl.gui_launcher:main',
         ],
     },
 )
