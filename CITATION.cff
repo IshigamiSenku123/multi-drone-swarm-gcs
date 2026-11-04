@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: "Multi-Drone Autonomous Swarm with GCS"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - name: "Muhammad Nouman"
+license: MIT
+repository-code: "https://github.com/IshigamiSenku123/multi-drone-swarm-gcs"
+version: 1.0.0
+date-released: 2026-11-05
+keywords: [uav, swarm, formation-control, fault-tolerance, px4, ros2, mavros, gazebo]
