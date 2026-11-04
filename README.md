@@ -15,7 +15,7 @@ The ground station streams **OFFBOARD position setpoints at 20 Hz**, while PX4 h
 
 | Gazebo Simulation | Tkinter Mission GUI | Terminal Fault Detection |
 |:---:|:---:|:---:|
-| ![Gazebo Simulation](docs/images/gazebo_screenshot.png) | ![Mission GUI](docs/images/gui_screenshot.png) | ![Terminal Fault Detection](docs/images/terminal_fault.png) |
+| ![Gazebo Simulation](docs/images/gazebo_screenshot.png) | ![Mission GUI](docs/images/gui_screenshot.png) |
 
 ---
 
