@@ -40,7 +40,12 @@ Ubuntu 22.04 | ROS 2 Humble | Gazebo 11.10.2 | PX4 v1.13.3 | MAVROS 2.14.0 | Pyt
 - F1 telemetry loss (`pkill -9 -f "px4.*-i 1"` mid-FORWARD): detected within the 2 s
   heartbeat window; drone1 isolated; drones 0+2 completed the 30 m path.
   Log: results/f1_telemetry_loss_isolate_and_continue.csv
-- F2 mode dropout / F3 in-air disarm / F4 low battery: harness ready, validation pending.
+## Fault tolerance - validated results
+All fault tolerance policies have been successfully tested in SITL:
+- **F1 Telemetry loss** (`pkill -9 -f "px4.*-i 1"`): Detected within 2s; drone1 isolated; drones 0+2 completed the 30m path.
+- **F2 Mode dropout** (`ros2 service call /drone1/set_mode ... AUTO.LOITER`): Detected after 2s grace period; drone1 isolated; survivors continued.
+- **F3 In-air disarm** (`ros2 service call /drone1/cmd/arming ... false`): Detected immediately; drone1 isolated; survivors continued.
+- **F4 Low battery** (`-p battery_low_threshold_v:=100.0`): Detected immediately; faulty drone(s) isolated per policy.
 Injection commands: docs/fault_tolerance.md
 
 ## Version history
