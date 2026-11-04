@@ -381,7 +381,7 @@ Released under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
 ---
 
-## 🙏 Acknowledgments
+## 🧩 Acknowledgments
 
 - **PX4 Autopilot & MAVROS:** For providing the flight-control stack and ROS 2 communication bridge.
 - **MDS (MAVSDK Drone Show):** For inspiring the GCS-centric architecture.
