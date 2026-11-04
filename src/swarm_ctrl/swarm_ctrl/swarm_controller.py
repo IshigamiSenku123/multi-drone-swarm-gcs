@@ -67,12 +67,22 @@ class SwarmController(Node):
         }
 
         self.drone_namespaces = [f'drone{i}' for i in range(self.num_drones)]
-        # FIX 2: Equilateral triangle formation in ENU (x=East, y=North)
-        self.formation_offsets = {
-            'drone0': (0.0, 0.0, 0.0),
-            'drone1': (self.formation_sep, 0.0, 0.0),
-            'drone2': (self.formation_sep/2.0, self.formation_sep*math.sqrt(3)/2.0, 0.0),
-        }
+
+        # Shape selection parameters
+        # Default preserves the original working equilateral behavior.
+        self.declare_parameter('formation_shape', 'equilateral')
+        self.declare_parameter('right_leg_a_m', 2.0)
+        self.declare_parameter('right_leg_b_m', 2.0)
+        self.declare_parameter('custom_offsets_str', '')
+
+        self.formation_shape = str(self.get_parameter('formation_shape').value).strip().lower()
+        self.right_leg_a = float(self.get_parameter('right_leg_a_m').value)
+        self.right_leg_b = float(self.get_parameter('right_leg_b_m').value)
+        self.custom_offsets_str = str(self.get_parameter('custom_offsets_str').value).strip()
+
+        # Formation offsets are now selected by shape.
+        # All offsets are ENU XY offsets relative to the formation reference point.
+        self.formation_offsets = self.build_formation_offsets()
         # FIX 1: ENU frame — z positive = UP
         self.target_altitudes = {
             'drone0': self.base_altitude,
@@ -172,6 +182,74 @@ class SwarmController(Node):
 
     def get_mode(self, ns):
         return self.drone_states[ns].mode if ns in self.drone_states else 'UNKNOWN'
+
+    def build_formation_offsets(self):
+        shape = self.formation_shape
+
+        if shape == 'equilateral':
+            return {
+                'drone0': (0.0, 0.0, 0.0),
+                'drone1': (self.formation_sep, 0.0, 0.0),
+                'drone2': (
+                    self.formation_sep / 2.0,
+                    self.formation_sep * math.sqrt(3.0) / 2.0,
+                    0.0
+                ),
+            }
+
+        if shape == 'right_triangle':
+            return {
+                'drone0': (0.0, 0.0, 0.0),
+                'drone1': (self.right_leg_a, 0.0, 0.0),
+                'drone2': (0.0, self.right_leg_b, 0.0),
+            }
+
+        if shape == 'custom':
+            return self.parse_custom_offsets(self.custom_offsets_str)
+
+        raise ValueError(
+            f"Unsupported formation_shape='{shape}'. "
+            "Use 'equilateral', 'right_triangle', or 'custom'."
+        )
+
+    def parse_custom_offsets(self, raw):
+        raw = (raw or '').strip()
+
+        if not raw:
+            raise ValueError(
+                "custom_offsets_str is empty. "
+                "Use format: '0,0;2,0;1,1.732'"
+            )
+
+        parts = [p.strip() for p in raw.split(';') if p.strip()]
+
+        if len(parts) != 3:
+            raise ValueError(
+                "custom_offsets_str must contain exactly 3 pairs, "
+                "separated by ';'. Example: '0,0;2,0;1,1.732'"
+            )
+
+        offsets = {}
+
+        for i, part in enumerate(parts):
+            coords = [c.strip() for c in part.split(',')]
+
+            if len(coords) != 2:
+                raise ValueError(
+                    f"Custom offset {i} must be 'x,y'. Got: '{part}'"
+                )
+
+            try:
+                x = float(coords[0])
+                y = float(coords[1])
+            except ValueError as exc:
+                raise ValueError(
+                    f"Custom offset {i} is not numeric: '{part}'"
+                ) from exc
+
+            offsets[f'drone{i}'] = (x, y, 0.0)
+
+        return offsets
 
     def publish_setpoints(self):
         if self.phase == Phase.INIT:
