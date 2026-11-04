@@ -66,6 +66,16 @@ class SwarmController(Node):
             'drone2': (-3.0, 0.0),
         }
 
+        # Collision avoidance (Hu et al. 2025, Eq. 15-18), GCS-side, OPTIONAL.
+        # Default OFF: behavior identical to the validated working controller.
+        self.declare_parameter('collision_avoidance_enabled', False)
+        self.declare_parameter('min_safe_distance_m', 1.0)
+        self.declare_parameter('collision_gain', 0.5)
+        self.collision_avoidance_enabled = bool(self.get_parameter('collision_avoidance_enabled').value)
+        self.min_safe_distance = float(self.get_parameter('min_safe_distance_m').value)
+        self.collision_gain = float(self.get_parameter('collision_gain').value)
+        self._last_ca_log = 0.0
+
         self.drone_namespaces = [f'drone{i}' for i in range(self.num_drones)]
 
         # Shape selection parameters
@@ -250,6 +260,46 @@ class SwarmController(Node):
             offsets[f'drone{i}'] = (x, y, 0.0)
 
         return offsets
+    def world_position(self, ns):
+        """Convert a drone's local EKF pose into the common world frame by
+        adding its spawn/home offset (same transform used for setpoints)."""
+        p = self.drone_poses[ns].pose.position
+        ox, oy = self.spawn_offsets[ns]
+        return (p.x + ox, p.y + oy, p.z)
+
+    def collision_correction(self, ns):
+        """Potential-field repulsion (Hu et al. 2025, Eq. 15-18) as a GCS-side
+        setpoint correction, computed from ACTUAL world-frame positions.
+        Returns (dx, dy, dz) in world frame; zeros when disabled or when every
+        pair distance exceeds min_safe_distance_m."""
+        if not self.collision_avoidance_enabled:
+            return (0.0, 0.0, 0.0)
+        if ns not in self.drone_poses:
+            return (0.0, 0.0, 0.0)
+        wx, wy, wz = self.world_position(ns)
+        dx = 0.0; dy = 0.0; dz = 0.0
+        active = False
+        for other in self.drone_namespaces:
+            if other == ns or other not in self.drone_poses:
+                continue
+            ox, oy, oz = self.world_position(other)
+            rx = wx - ox; ry = wy - oy; rz = wz - oz
+            dist = math.sqrt(rx*rx + ry*ry + rz*rz)
+            if 1e-6 < dist < self.min_safe_distance:
+                overlap = self.min_safe_distance - dist
+                dx += (rx / dist) * overlap * self.collision_gain
+                dy += (ry / dist) * overlap * self.collision_gain
+                dz += (rz / dist) * overlap * self.collision_gain
+                active = True
+        if active:
+            now = time.time()
+            if now - self._last_ca_log > 2.0:
+                self.get_logger().warn(
+                    f'COLLISION AVOIDANCE active on {ns}: '
+                    f'correction=({dx:.2f},{dy:.2f},{dz:.2f}) m')
+                self._last_ca_log = now
+        return (dx, dy, dz)
+
 
     def publish_setpoints(self):
         if self.phase == Phase.INIT:
@@ -274,11 +324,15 @@ class SwarmController(Node):
                 # World frame target (relative to drone0's spawn at 0,0)
                 world_x = self.formation_ref_x + self.forward_offset + offset[0]
                 world_y = self.formation_ref_y + offset[1]
+                # Optional collision-avoidance correction (default OFF = zeros)
+                cx, cy, cz = self.collision_correction(ns)
+                world_x += cx
+                world_y += cy
                 # Transform to each drone's local EKF frame
                 spawn_x, spawn_y = self.spawn_offsets[ns]
                 sp.pose.position.x = world_x - spawn_x
                 sp.pose.position.y = world_y - spawn_y
-                sp.pose.position.z = self.target_altitudes[ns]
+                sp.pose.position.z = self.target_altitudes[ns] + cz
             elif self.phase in (Phase.HOLD, Phase.FAULT):
                 p = self.drone_poses[ns].pose.position
                 sp.pose.position.x = p.x; sp.pose.position.y = p.y; sp.pose.position.z = p.z
