@@ -27,8 +27,7 @@ from enum import Enum, auto
 class Phase(Enum):
     INIT = auto(); PRE_OFFBOARD = auto(); SET_OFFBOARD = auto()
     ARM = auto(); TAKEOFF = auto(); FORMATION = auto()
-    HOLD = auto(); FAULT = auto()
-
+    FORWARD = auto(); HOLD = auto(); FAULT = auto()
 class SwarmController(Node):
     def __init__(self):
         super().__init__('swarm_controller')
@@ -51,6 +50,21 @@ class SwarmController(Node):
         self.formation_sep = self.get_parameter('formation_separation_m').value
         self.alt_stagger = self.get_parameter('altitude_stagger_m').value
         self.base_altitude = self.get_parameter('base_altitude_m').value
+
+        # Forward movement parameters (added for path execution)
+        self.declare_parameter('forward_distance_m', 0.0)
+        self.declare_parameter('forward_speed_mps', 1.0)
+        self.declare_parameter('formation_hold_before_forward_sec', 5.0)
+        self.forward_distance = self.get_parameter('forward_distance_m').value
+        self.forward_speed = self.get_parameter('forward_speed_mps').value
+        self.formation_hold_before_forward = self.get_parameter('formation_hold_before_forward_sec').value
+
+        # Spawn offsets from restart_swarm.sh (world coordinates of each drone's local frame origin)
+        self.spawn_offsets = {
+            'drone0': (0.0, 0.0),
+            'drone1': (3.0, 0.0),
+            'drone2': (-3.0, 0.0),
+        }
 
         self.drone_namespaces = [f'drone{i}' for i in range(self.num_drones)]
         # FIX 2: Equilateral triangle formation in ENU (x=East, y=North)
@@ -80,6 +94,12 @@ class SwarmController(Node):
         self.takeoff_start_z = 0.0
         self._last_formation_log = 0.0
         self._last_fault_log = 0.0
+        # Forward movement state
+        self.formation_entry_time = None
+        self.forward_entry_time = None
+        self.formation_ref_x = 0.0
+        self.formation_ref_y = 0.0
+        self.forward_offset = 0.0
         self.pending_set_mode = {}
         self.pending_arming = {}
         self.offboard_confirmed = set()
@@ -171,11 +191,15 @@ class SwarmController(Node):
                 interp_z = start_z + (target_z - start_z) * self.takeoff_progress
                 p = self.drone_poses[ns].pose.position
                 sp.pose.position.x = p.x; sp.pose.position.y = p.y; sp.pose.position.z = interp_z
-            elif self.phase == Phase.FORMATION:
-                leader_p = self.drone_poses[self.leader].pose.position
+            elif self.phase in (Phase.FORMATION, Phase.FORWARD):
                 offset = self.formation_offsets[ns]
-                sp.pose.position.x = leader_p.x + offset[0]
-                sp.pose.position.y = leader_p.y + offset[1]
+                # World frame target (relative to drone0's spawn at 0,0)
+                world_x = self.formation_ref_x + self.forward_offset + offset[0]
+                world_y = self.formation_ref_y + offset[1]
+                # Transform to each drone's local EKF frame
+                spawn_x, spawn_y = self.spawn_offsets[ns]
+                sp.pose.position.x = world_x - spawn_x
+                sp.pose.position.y = world_y - spawn_y
                 sp.pose.position.z = self.target_altitudes[ns]
             elif self.phase in (Phase.HOLD, Phase.FAULT):
                 p = self.drone_poses[ns].pose.position
@@ -260,19 +284,42 @@ class SwarmController(Node):
             elapsed = (self.get_clock().now() - self.takeoff_start_time).nanoseconds / 1e9
             self.takeoff_progress = min(1.0, elapsed / self.takeoff_duration)
             if self.takeoff_progress >= 1.0:
-                self.get_logger().info('Takeoff complete. FORMATION active.'); self.phase = Phase.FORMATION
+                    self.get_logger().info('Takeoff complete. FORMATION active.')
+                    # Capture formation reference point and reset forward offset
+                    leader_p = self.drone_poses[self.leader].pose.position
+                    self.formation_ref_x = leader_p.x
+                    self.formation_ref_y = leader_p.y
+                    self.forward_offset = 0.0
+                    self.formation_entry_time = now
+                    self.phase = Phase.FORMATION
             elif int(elapsed) > 0 and int(elapsed) % 2 == 0:
                 self.get_logger().info(f'Takeoff... {int(self.takeoff_progress * 100)}%')
 
         elif self.phase == Phase.FORMATION:
-            log_elapsed = now - self._last_formation_log
-            if log_elapsed > 5.0:
-                p0 = self.drone_poses['drone0'].pose.position
-                p1 = self.drone_poses['drone1'].pose.position
-                p2 = self.drone_poses['drone2'].pose.position
-                self.get_logger().info(f'FORMATION | Ldr({p0.x:.2f},{p0.y:.2f},{-p0.z:.1f}) | F1({p1.x:.2f},{p1.y:.2f},{-p1.z:.1f}) | F2({p2.x:.2f},{p2.y:.2f},{-p1.z:.1f})')
-                self._last_formation_log = now
-
+                # Transition to FORWARD if configured and hold time elapsed
+                if self.forward_distance > 0.0 and self.formation_entry_time is not None:
+                    if now - self.formation_entry_time >= self.formation_hold_before_forward:
+                        self.get_logger().info(f'FORMATION stable. Starting FORWARD {self.forward_distance:.1f}m...')
+                        self.forward_entry_time = now
+                        self.phase = Phase.FORWARD
+                log_elapsed = now - self._last_formation_log
+                if log_elapsed > 5.0:
+                    p0 = self.drone_poses['drone0'].pose.position
+                    p1 = self.drone_poses['drone1'].pose.position
+                    p2 = self.drone_poses['drone2'].pose.position
+                    self.get_logger().info(f'FORMATION | Ldr({p0.x:.2f},{p0.y:.2f},{-p0.z:.1f}) | F1({p1.x:.2f},{p1.y:.2f},{-p1.z:.1f}) | F2({p2.x:.2f},{p2.y:.2f},{-p1.z:.1f})')
+                    self._last_formation_log = now
+        elif self.phase == Phase.FORWARD:
+                if self.forward_entry_time is None:
+                    self.forward_entry_time = now
+                elapsed = now - self.forward_entry_time
+                self.forward_offset = min(self.forward_distance, elapsed * self.forward_speed)
+                if self.forward_offset >= self.forward_distance:
+                    self.get_logger().info('Forward path complete. HOLD active.')
+                    self.phase = Phase.HOLD
+                if now - self._last_formation_log > 5.0:
+                    self.get_logger().info(f'FORWARD | offset={self.forward_offset:.2f}/{self.forward_distance:.2f} m')
+                    self._last_formation_log = now
         elif self.phase == Phase.FAULT:
             if now - self._last_fault_log > 5.0:
                 self.get_logger().error('FAULT STATE ACTIVE.')
