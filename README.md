@@ -171,6 +171,9 @@ pip3 install --user pymavlink pyulog
 ## 🚀 How to Run
 
 The system requires a specific startup sequence to ensure that all PX4 instances and MAVROS connections are established correctly.
+*The "restart_swarm.sh" file is not included in the later builds and you must have this file to run the whole swarm.*
+*The same "restart_swarm.sh" is used for all the versions"*
+*Once you find this file( most likely in the latest version or this current repo), do the following*
 
 ### 1. Start the Swarm Simulation
 
@@ -195,7 +198,11 @@ chmod +x restart_swarm.sh
 
 #### Launch the Swarm (every time)
 From now on, you only need this single command:
+```bash
+# Navigate to the PX4 directory and run
 cd ~/PX4-Autopilot && ./restart_swarm.sh
+
+```
 
 **⚠️ Important:** Wait until you see:
 
