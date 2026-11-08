@@ -22,7 +22,7 @@ The ground station streams **OFFBOARD position setpoints at 20 Hz**, while PX4 h
 
 > ⚠️ **Note:** This video is of **Version 4 (V4)** and not of the latest one.
 
-[![Watch V4 Demo Video](docs/images/drone_pic.png)](docs/videos/v4.webm)
+[![Watch V4 Demo Video](docs/images/drone_pic.png)](docs/videos/V4.webm)
 *Click the image above to play the V4 demonstration.*
 ## ✨ Key Features
 
