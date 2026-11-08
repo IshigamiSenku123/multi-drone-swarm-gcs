@@ -44,33 +44,84 @@ The ground station streams **OFFBOARD position setpoints at 20 Hz**, while PX4 h
 
 ---
 
+## 📋 Prerequisites & Dependencies
+
+This project was developed and tested on **Ubuntu 22.04 LTS (Jammy Jellyfish)**. 
+
+### Core Software Stack
+* **ROS 2:** Humble Hawksbill (Desktop + Base)
+* **Gazebo:** Classic 11.10.2
+* **PX4 Autopilot:** v1.13.3 (SITL)
+* **MAVROS:** 2.14.0 (ROS 2 MAVLink bridge)
+* **Python:** 3.10.12
+
+### System & ROS 2 Packages
+Run the following command to install all required system-level dependencies, including ROS 2 Humble, Gazebo, MAVROS, and the build tools required for PX4 SITL:
+
+> **Note:** Ensure the official ROS 2 Humble apt repository is added to your system first by following the [ROS 2 Humble Ubuntu Installation Guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html).
+
+```bash
+sudo apt update
+sudo apt install -y \
+    ros-humble-desktop \
+    ros-humble-mavros \
+    ros-humble-mavros-extras \
+    ros-humble-tf2-tools \
+    ros-humble-rqt-common-plugins \
+    gazebo \
+    libgazebo-dev \
+    python3-tk \
+    python3-opencv \
+    python3-matplotlib \
+    python3-numpy \
+    python3-scipy \
+    python3-yaml \
+    python3-jinja2 \
+    build-essential \
+    cmake \
+    ninja-build \
+    gcc-arm-none-eabi \
+    git \
+    curl \
+    wget \
+    tmux \
+    htop
+
+```
+
+---
+
 ## 📂 Repository Structure
 
 ```text
+
 ├── src/
-│   └── swarm_ctrl/       # ROS 2 package
-│       ├── controller    # Swarm formation controller
-│       ├── GUI           # Mission GUI
-│       ├── monitor       # Fault detection and monitoring
-│       ├── setup.py
-│       └── package.xml
+│   └── swarm_ctrl/               # ROS 2 package root
+│       ├── swarm_ctrl/           # Nested Python module (actual source code)
+│       │   ├── __init__.py
+│       │   ├── swarm_controller.py
+│       │   ├── gui_launcher.py
+│       │   └── monitor.py
+│       ├── resource/
+│       │   └── swarm_ctrl        # Ament index marker
+│       ├── setup.py              # Package build configuration
+│       ├── setup.cfg             # Entry points for ros2 run
+│       └── package.xml           # ROS 2 package manifest
 │
 ├── scripts/
-│   └── restart_swarm.sh  # Starts 3x PX4 SITL, Gazebo,
-│                         # MAVROS, and PX4 parameters
+│   └── restart_swarm.sh          # Starts 3x PX4 SITL + Gazebo + MAVROS
 │
 ├── docs/
-│   ├── architecture      # System architecture
-│   ├── ROS 2 topology    # ROS 2 communication topology
+│   ├── architecture.md
+│   ├── ros2_topology.md
 │   ├── fault_tolerance.md
-│   └── version history
+│   └── version_history.md
 │
-├── results/              # Validated flight logs (CSV)
-│                         # and screenshots
-│
+├── results/                      # Validated flight logs & screenshots
 ├── LICENSE
 ├── CITATION.cff
 └── README.md
+
 ```
 
 ---
@@ -123,11 +174,28 @@ The system requires a specific startup sequence to ensure that all PX4 instances
 
 ### 1. Start the Swarm Simulation
 
-From the repository root, execute:
+The launch script relies on PX4's internal build paths, so it **must** be executed from inside your `PX4-Autopilot` directory.
+
+#### First-Time Setup (run once)
+
+Open **Terminal 1** and run:
 
 ```bash
-./scripts/restart_swarm.sh
+# Navigate to the PX4 directory
+cd ~/PX4-Autopilot
+
+# Copy the script from wherever you cloned this repository
+# (Adjust the path if you cloned it somewhere other than your home folder)
+cp ~/multi-drone-swarm-gcs/scripts/restart_swarm.sh .
+
+
+# Ensure it has execute permissions (crucial if downloaded as a .zip)
+chmod +x restart_swarm.sh
 ```
+
+#### Launch the Swarm (every time)
+From now on, you only need this single command:
+cd ~/PX4-Autopilot && ./restart_swarm.sh
 
 **⚠️ Important:** Wait until you see:
 
@@ -325,6 +393,15 @@ FAULT DETECTED: drone2 - BATTERY_LOW
 - Each faulty drone is handled according to the configured fault-handling logic.
 
 ---
+### 🕵️ Detection Mechanisms (D1–D4)
+Before a fault can be handled (F1–F4), the GCS must first detect the anomaly (D1–D4) using a 10 Hz monitoring loop:
+
+| Detection ID | Anomaly Detected | Trigger Condition |
+|:---:|:---|:---|
+| **D1** | Telemetry Loss | Pose heartbeat is older than `heartbeat_timeout_sec` (2.0 s). |
+| **D2** | Mode Dropout | `state.mode != OFFBOARD` while armed and connected (2 s grace period). |
+| **D3** | In-Air Disarm | `state.armed` transitions to `false` during active mission phases. |
+| **D4** | Low Battery | Battery voltage drops below `battery_low_threshold_v` (default 10.5 V). |
 
 ### Fault-Handling Policies
 
@@ -388,3 +465,4 @@ Released under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 - **Hu et al. (IEEE TAES, 2025):** For the mathematical formulation inspiring the potential-field collision-avoidance approach.
 
 ---
+
