@@ -18,7 +18,12 @@ The ground station streams **OFFBOARD position setpoints at 20 Hz**, while PX4 h
 | ![Gazebo Simulation](docs/images/gazebo_screenshot.png) | ![Mission GUI](docs/images/gui_screenshot.png) |
 
 ---
+## 🎥 Demo Video
 
+> ⚠️ **Note:** This video is of **Version 4 (V4)** and not of the latest one.
+
+[![Watch V4 Demo Video](docs/images/drone_pic.png)](docs/videos/v4.webm)
+*Click the image above to play the V4 demonstration.*
 ## ✨ Key Features
 
 - **Dynamic Formation Control:** Supports equilateral triangular, right-triangle, and custom formations through ROS 2 parameters or the GUI.
@@ -171,7 +176,7 @@ pip3 install --user pymavlink pyulog
 ## 🚀 How to Run
 
 The system requires a specific startup sequence to ensure that all PX4 instances and MAVROS connections are established correctly.
-*The "restart_swarm.sh" file is not included in the later builds and you must have this file to run the whole swarm.*
+*The "restart_swarm.sh" file is not included in the earlier builds and you must have this file to run the whole swarm.*
 *The same "restart_swarm.sh" is used for all the versions"*
 *Once you find this file( most likely in the latest version or this current repo), do the following*
 
