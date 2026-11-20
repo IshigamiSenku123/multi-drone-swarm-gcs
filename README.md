@@ -1,6 +1,6 @@
 # 🚁 Multi-Drone Autonomous Swarm with GCS
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24057491.svg)](https://doi.org/10.5281/zenodo.24057491)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24405170.svg)](https://doi.org/10.5281/zenodo.24405170)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blue)](https://docs.ros.org/en/humble/)
 [![PX4](https://img.shields.io/badge/PX4-v1.13.3-orange)](https://px4.io/)
